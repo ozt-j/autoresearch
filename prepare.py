@@ -23,6 +23,8 @@ import rustbpe
 import tiktoken
 import torch
 
+import subprocess
+
 # ---------------------------------------------------------------------------
 # Constants (fixed, do not modify)
 # ---------------------------------------------------------------------------
@@ -63,16 +65,26 @@ def download_single_shard(index):
 
     url = f"{BASE_URL}/{filename}"
     max_attempts = 5
+    proxy = "127.0.0.1:1080"  # SOCKS5 proxy
     for attempt in range(1, max_attempts + 1):
         try:
-            response = requests.get(url, stream=True, timeout=30)
-            response.raise_for_status()
-            temp_path = filepath + ".tmp"
-            with open(temp_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
-            os.rename(temp_path, filepath)
+            #response = requests.get(url, stream=True, timeout=30)
+            # Modified:
+            
+            # Replace requests.get(...) block with this:
+            subprocess.run(
+                ["curl", "-L", "-C", "-", "-x", f"socks5h://{proxy}", "-o", filepath, url],
+                check=True
+            )
+            #response = requests.get(url, stream=True, timeout=30, proxies=proxies)
+
+            #response.raise_for_status()
+            #temp_path = filepath + ".tmp"
+            #with open(temp_path, "wb") as f:
+            #    for chunk in response.iter_content(chunk_size=1024 * 1024):
+            #        if chunk:
+            #            f.write(chunk)
+            #os.rename(temp_path, filepath)
             print(f"  Downloaded {filename}")
             return True
         except (requests.RequestException, IOError) as e:
@@ -258,7 +270,6 @@ def _document_batches(split, tokenizer_batch_size=128):
     val_path = os.path.join(DATA_DIR, VAL_FILENAME)
     if split == "train":
         parquet_paths = [p for p in parquet_paths if p != val_path]
-        assert len(parquet_paths) > 0, "No training shards found."
     else:
         parquet_paths = [val_path]
     epoch = 1
